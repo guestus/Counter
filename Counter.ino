@@ -1,7 +1,26 @@
 /*
- * Homeyduino firmware for ESP
+ * Homeyduino firmware for Sonoff Basic
+ * 
+ * WARNING:
+ * Never try to program a Sonoff which is connected to the mains! Failure to
+ * disconnect mains before connecting the usb to serial converter will cause
+ * damage to you and your equipment.
+ * 
+ * Always power the Sonoff using an external 3.3v source while programming.
  * 
  */
+
+// -- CONFIGURATION --------------------------------------------------------------
+
+/* Comment out (//) lines to disable the feature */
+
+#define BUTTON_SWITCHES_OUTPUT //Have the button toggle the relay directly
+                               //(if disabled the button will only send a trigger)
+
+#define LED_SHOWS_OUTPUT_STATE //Have the led show the state of the relay
+                               //(if disabled led can be controlled using an action)
+
+//--------------------------------------------------------------------------------
 
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -11,28 +30,15 @@
 #include <SoftwareSerial.h>
 #include <Homey.h>
 
-//GPIO map
-#define PIN_BUTTON  0
-#define PIN_LED     13
-#define PIN_RELAY   12
-
 WiFiManager wifiManager;
 SoftwareSerial readerSerial(13,15,false,256);
 
-bool state = false;
-bool previousButtonState = false;
 unsigned long previousMillis = 0;
 const unsigned long interval = 1000; //Interval in milliseconds
 
 void setup() {
   Serial.begin(115200);
   readerSerial.begin(9600);
-  pinMode(PIN_BUTTON, INPUT); //Set button pin to input
-  pinMode(PIN_LED, OUTPUT);   //Set led pin to output
-  pinMode(PIN_RELAY, OUTPUT); //Set relay pin to output
-  
-  digitalWrite(PIN_LED, LOW); //Turn led on
-  digitalWrite(PIN_RELAY, LOW); //Turn output off
   
   String deviceName = "Mercury-" + String(ESP.getChipId()); //Generate device name based on ID
 
@@ -47,9 +53,6 @@ void setup() {
   Homey.addCapability("measure_power");
   Homey.addCapability("meter_power.day");
   Homey.addCapability("meter_power.night");
-  
-  digitalWrite(PIN_LED, HIGH); //Turn led off
-  process_counter();
 }
 
 void loop() {
@@ -57,12 +60,12 @@ void loop() {
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis > interval) {
     previousMillis = currentMillis;
-  UpdateCapability();
+    UpdateCapability();
   }
 }
 
+
 void UpdateCapability() {
-  process_counter();
 }
 
 
@@ -157,18 +160,15 @@ void process_counter() {
     res2+= String(Serial.read(),HEX); 
   }
   delayMicroseconds(20);
+  int Uv= atoi(("0x"+res.substring(0, 2)).c_str()) / 10;
+  int Ia= atoi(("0x"+res.substring(2, 4)).c_str()) / 100;
+  int Pv= atoi(("0x"+res.substring(4, 7)).c_str()) / 1000;
+  int tarif=  atoi(("0x"+res2.substring(0, 4)).c_str()) / 100;
+  int tarif2= atoi(("0x"+res2.substring(4, 8)).c_str()) / 100;
 
-  //$Uv = bin2hex(substr($answer, 0, 2)) / 10;
-//$Ia = bin2hex(substr($answer, 2, 2)) / 100;
-//$Pv = bin2hex(substr($answer, 4, 3)) / 1000;
-//$tarif = bin2hex(substr($answer2, 0, 4)) / 100;
-//$tarif2 = bin2hex(substr($answer2, 4, 4)) / 100;
-//$tarif0 = ($tarif + $tarif2);
-//sg('counter.volt', $Uv);
-//sg('counter.amper', $Ia);
-//sg('counter.watt', $Pv);
-//sg('counter.count', $tarif0);
-//sg('counter.tariff1', $tarif);
-//sg('counter.tariff2', $tarif2);
-
+  Homey.setCapabilityValue("measure_voltage", Uv);
+  Homey.setCapabilityValue("measure_current", Ia);
+  Homey.setCapabilityValue("measure_power", Pv);
+  Homey.setCapabilityValue("meter_power.day", tarif);
+  Homey.setCapabilityValue("meter_power.night", tarif2);
 }  
