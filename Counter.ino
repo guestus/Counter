@@ -1,26 +1,7 @@
 /*
- * Homeyduino firmware for Sonoff Basic
- * 
- * WARNING:
- * Never try to program a Sonoff which is connected to the mains! Failure to
- * disconnect mains before connecting the usb to serial converter will cause
- * damage to you and your equipment.
- * 
- * Always power the Sonoff using an external 3.3v source while programming.
+ * Homeyduino firmware for ESP
  * 
  */
-
-// -- CONFIGURATION --------------------------------------------------------------
-
-/* Comment out (//) lines to disable the feature */
-
-#define BUTTON_SWITCHES_OUTPUT //Have the button toggle the relay directly
-                               //(if disabled the button will only send a trigger)
-
-#define LED_SHOWS_OUTPUT_STATE //Have the led show the state of the relay
-                               //(if disabled led can be controlled using an action)
-
-//--------------------------------------------------------------------------------
 
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -41,7 +22,7 @@ SoftwareSerial readerSerial(13,15,false,256);
 bool state = false;
 bool previousButtonState = false;
 unsigned long previousMillis = 0;
-const unsigned long interval = 100; //Interval in milliseconds
+const unsigned long interval = 1000; //Interval in milliseconds
 
 void setup() {
   Serial.begin(115200);
@@ -80,8 +61,8 @@ void loop() {
   }
 }
 
-
 void UpdateCapability() {
+  process_counter();
 }
 
 
