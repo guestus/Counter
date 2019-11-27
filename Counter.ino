@@ -30,15 +30,24 @@
 #include <SoftwareSerial.h>
 #include <Homey.h>
 
+#if defined(ESP8266) && !defined(D5)
+#define D5 (14)
+#define D6 (12)
+#define D7 (13)
+#define D8 (15)
+#endif
+
+
 WiFiManager wifiManager;
-SoftwareSerial readerSerial(13,15,false,256);
+SoftwareSerial readerSerial; //(13,15,false,256);
 
 unsigned long previousMillis = 0;
-const unsigned long interval = 1000; //Interval in milliseconds
+const unsigned long interval = 5000; //Interval in milliseconds
 
 void setup() {
   Serial.begin(115200);
-  readerSerial.begin(9600);
+  //readerSerial.begin(9600);
+  readerSerial.begin(9600, SWSERIAL_8N1, D5, D6, false, 95, 11);
   
   String deviceName = "Mercury-" + String(ESP.getChipId()); //Generate device name based on ID
 
@@ -47,12 +56,14 @@ void setup() {
   Serial.println("Connected!");
   
   Homey.begin(deviceName, "Mercury"); //Start Homeyduino
-  Homey.setClass("other");
+  Homey.setClass("sensor");
   Homey.addCapability("measure_voltage");
   Homey.addCapability("measure_current");
   Homey.addCapability("measure_power");
-  Homey.addCapability("meter_power.day");
-  Homey.addCapability("meter_power.night");
+  Homey.addCapability("meter_powerXday");
+  Homey.addCapability("meter_powerXnight");
+  Serial.println("..exit setup");
+
 }
 
 void loop() {
@@ -60,7 +71,9 @@ void loop() {
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis > interval) {
     previousMillis = currentMillis;
+    Serial.println("Updating capability...");
     UpdateCapability();
+    Serial.println("exit Updating capability...");
   }
 }
 
@@ -144,8 +157,9 @@ void process_counter() {
   String res;
   //digitalWrite(D0, LOW);
   delayMicroseconds(1);
-  while (readerSerial.available()) {
+  while (readerSerial.available()>0) {
     res+= String(Serial.read(),HEX); 
+    yield();
   }
   delayMicroseconds(20);
 
@@ -156,8 +170,9 @@ void process_counter() {
   cmd+= String(crc16_modbus(cmd), HEX);
   Serial.print(cmd);
   delayMicroseconds(1);
-  while (Serial.available()) {
+  while (Serial.available()>0) {
     res2+= String(Serial.read(),HEX); 
+    yield();
   }
   delayMicroseconds(20);
   int Uv= atoi(("0x"+res.substring(0, 2)).c_str()) / 10;
@@ -169,6 +184,6 @@ void process_counter() {
   Homey.setCapabilityValue("measure_voltage", Uv);
   Homey.setCapabilityValue("measure_current", Ia);
   Homey.setCapabilityValue("measure_power", Pv);
-  Homey.setCapabilityValue("meter_power.day", tarif);
-  Homey.setCapabilityValue("meter_power.night", tarif2);
+  Homey.setCapabilityValue("meter_powerXday", tarif);
+  Homey.setCapabilityValue("meter_powerXnight", tarif2);
 }  
