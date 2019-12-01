@@ -1,26 +1,7 @@
 /*
- * Homeyduino firmware for Sonoff Basic
- * 
- * WARNING:
- * Never try to program a Sonoff which is connected to the mains! Failure to
- * disconnect mains before connecting the usb to serial converter will cause
- * damage to you and your equipment.
- * 
- * Always power the Sonoff using an external 3.3v source while programming.
+ * Homeyduino firmware for %
  * 
  */
-
-// -- CONFIGURATION --------------------------------------------------------------
-
-/* Comment out (//) lines to disable the feature */
-
-#define BUTTON_SWITCHES_OUTPUT //Have the button toggle the relay directly
-                               //(if disabled the button will only send a trigger)
-
-#define LED_SHOWS_OUTPUT_STATE //Have the led show the state of the relay
-                               //(if disabled led can be controlled using an action)
-
-//--------------------------------------------------------------------------------
 
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -47,7 +28,7 @@ const unsigned long interval = 5000; //Interval in milliseconds
 void setup() {
   Serial.begin(115200);
   //readerSerial.begin(9600);
-  readerSerial.begin(9600, SWSERIAL_8N1, D5, D6, false, 95, 11);
+  readerSerial.begin(9600, SWSERIAL_8N1, D7, D8, false, 95, 11);
   
   String deviceName = "Mercury-" + String(ESP.getChipId()); //Generate device name based on ID
 
@@ -55,15 +36,13 @@ void setup() {
   wifiManager.autoConnect(deviceName.c_str(), ""); //Start wifiManager
   Serial.println("Connected!");
   
-  Homey.begin(deviceName, "Mercury"); //Start Homeyduino
+  Homey.begin(deviceName); //Start Homeyduino
   Homey.setClass("sensor");
   Homey.addCapability("measure_voltage");
   Homey.addCapability("measure_current");
   Homey.addCapability("measure_power");
   Homey.addCapability("meter_powerXday");
   Homey.addCapability("meter_powerXnight");
-  Serial.println("..exit setup");
-
 }
 
 void loop() {
@@ -71,14 +50,13 @@ void loop() {
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis > interval) {
     previousMillis = currentMillis;
-    Serial.println("Updating capability...");
     UpdateCapability();
-    Serial.println("exit Updating capability...");
   }
 }
 
 
 void UpdateCapability() {
+   process_counter();
 }
 
 
@@ -148,39 +126,47 @@ String nice_hex(String str1) {
 }
 
 void process_counter() {
-  String cmd="0056584163";  // 00 + 0EB6DE Адрес + 63 команда
-  cmd+= String(crc16_modbus(cmd), HEX);
+  int Uv= 0;
+  int Ia= 0;
+  int Pv= 0;
+  int tarif=  0;
+  int tarif2= 0;
   
-  //digitalWrite(D0, HIGH);
-  delayMicroseconds(1);
-  readerSerial.print(cmd);
-  String res;
-  //digitalWrite(D0, LOW);
-  delayMicroseconds(1);
-  while (readerSerial.available()>0) {
-    res+= String(Serial.read(),HEX); 
-    yield();
-  }
-  delayMicroseconds(20);
-
-  //digitalWrite(D0, HIGH);
-  delayMicroseconds(1);
-  String res2;
-  cmd= "0056584127"; // 00 + 0EB6DE Адрес + 27 команда
-  cmd+= String(crc16_modbus(cmd), HEX);
-  Serial.print(cmd);
-  delayMicroseconds(1);
-  while (Serial.available()>0) {
-    res2+= String(Serial.read(),HEX); 
-    yield();
-  }
-  delayMicroseconds(20);
-  int Uv= atoi(("0x"+res.substring(0, 2)).c_str()) / 10;
-  int Ia= atoi(("0x"+res.substring(2, 4)).c_str()) / 100;
-  int Pv= atoi(("0x"+res.substring(4, 7)).c_str()) / 1000;
-  int tarif=  atoi(("0x"+res2.substring(0, 4)).c_str()) / 100;
-  int tarif2= atoi(("0x"+res2.substring(4, 8)).c_str()) / 100;
-
+    String cmd="0056584163";  // 00 + 0EB6DE Адрес + 63 команда
+    cmd+= String(crc16_modbus(cmd), HEX);
+    //digitalWrite(D0, HIGH);
+    delayMicroseconds(1);
+    readerSerial.print(cmd);
+    String res="";
+    //digitalWrite(D0, LOW);
+    delayMicroseconds(1);
+    while (readerSerial.available()>0) {
+      res+= String(readerSerial.read(),HEX); 
+       yield();
+    }
+    delayMicroseconds(20);
+    
+      //digitalWrite(D0, HIGH);
+      delayMicroseconds(1);
+      String res2="";
+      cmd= "0056584127"; // 00 + 0EB6DE Адрес + 27 команда
+      cmd+= String(crc16_modbus(cmd), HEX);
+      readerSerial.print(cmd);
+      delayMicroseconds(1);
+      while (readerSerial.available()>0) {
+        res2+= String(readerSerial.read(),HEX); 
+        yield();
+      }
+      delayMicroseconds(20);
+  if (res.length()>0) {
+      Uv= atoi(("0x"+res.substring(0, 2)).c_str()) / 10;
+      Ia= atoi(("0x"+res.substring(2, 4)).c_str()) / 100;
+      Pv= atoi(("0x"+res.substring(4, 7)).c_str()) / 1000;
+  };
+  if (res2.length()>0) {
+      tarif=  atoi(("0x"+res2.substring(0, 4)).c_str()) / 100;
+      tarif2= atoi(("0x"+res2.substring(4, 8)).c_str()) / 100;
+  };
   Homey.setCapabilityValue("measure_voltage", Uv);
   Homey.setCapabilityValue("measure_current", Ia);
   Homey.setCapabilityValue("measure_power", Pv);
