@@ -27,8 +27,9 @@ const unsigned long interval = 5000; //Interval in milliseconds
 
 void setup() {
   Serial.begin(115200);
-  readerSerial.begin(9600, SWSERIAL_8N1, D5, D6, false, 95, 11);
+  readerSerial.begin(9600, SWSERIAL_8N1, D5, D6);
   readerSerial.setTransmitEnablePin(D7); 
+  readerSerial.enableRx(true);  
 
   String deviceName = "Mercury-" + String(ESP.getChipId()); //Generate device name based on ID
 
@@ -61,7 +62,7 @@ void UpdateCapability() {
 
 
 int crc16_modbus(String str1) {
-  const byte auchCRCHi[]  = { 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81,
+  const uint8_t auchCRCHi[]  = { 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81,
                               0x40, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0,
                               0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01,
                               0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41,
@@ -80,7 +81,7 @@ int crc16_modbus(String str1) {
                               0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81,
                               0x40
                             };
-  const byte auchCRCLo[] =  {  0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06, 0x07, 0xC7, 0x05, 0xC5, 0xC4,
+  const uint8_t auchCRCLo[] =  {  0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06, 0x07, 0xC7, 0x05, 0xC5, 0xC4,
                                0x04, 0xCC, 0x0C, 0x0D, 0xCD, 0x0F, 0xCF, 0xCE, 0x0E, 0x0A, 0xCA, 0xCB, 0x0B, 0xC9, 0x09,
                                0x08, 0xC8, 0xD8, 0x18, 0x19, 0xD9, 0x1B, 0xDB, 0xDA, 0x1A, 0x1E, 0xDE, 0xDF, 0x1F, 0xDD,
                                0x1D, 0x1C, 0xDC, 0x14, 0xD4, 0xD5, 0x15, 0xD7, 0x17, 0x16, 0xD6, 0xD2, 0x12, 0x13, 0xD3,
@@ -100,11 +101,12 @@ int crc16_modbus(String str1) {
                                0x40
                             };
   int len  = str1.length();
-  int uchCRCHi   = 0xFF;
-  int uchCRCLo   = 0xFF;
+  uint8_t uchCRCHi   = 0xFF;
+  uint8_t uchCRCLo   = 0xFF;
   int uIndex     = 0;
-  for (int i = 0; i < len; i++) {
-    uIndex     = uchCRCLo ^ str1.charAt(i);
+  for (int i = 0; i < len; i+=2) {
+    uint8_t b= hexToDec(str1.substring(i,i+2));
+    uIndex     = uchCRCLo ^ b;
     uchCRCLo   = uchCRCHi ^ auchCRCHi[uIndex];
     uchCRCHi   = auchCRCLo[uIndex] ;
   }
@@ -140,7 +142,7 @@ unsigned int hexToDec(String hexString) {
 
 void print_hex(String str) {
   for (int i = 0; i < str.length(); i = i + 2) {
-    readerSerial.print(char(hexToDec(str.substring(i, i + 2))));
+    readerSerial.write((uint8_t)hexToDec(str.substring(i, i + 2)));
    // Serial.print(char(hexToDec(str.substring(i, i + 2))));
   }
 }
@@ -154,20 +156,24 @@ void process_counter() {
 
   String cmd = "0056584163"; // 00 + 0EB6DE Адрес + 63 команда
   cmd += String(crc16_modbus(cmd), HEX);
+  cmd.toUpperCase();
   print_hex(cmd);
+  Serial.println(cmd);
   String res = "";
   unsigned long currentMillis = millis();
   do {
     while (readerSerial.available() > 0) {
-      res += String(readerSerial.read(), HEX);
+      uint8_t b=readerSerial.read();
+      res += String(b, HEX);
     }
   } while (millis() - previousMillis < 1000); 
-  
-  //Serial.println(res);
+  Serial.println(res);
   String res2 = "";
   cmd = "0056584127"; // 00 + 0EB6DE Адрес + 27 команда
   cmd += String(crc16_modbus(cmd), HEX);
+  cmd.toUpperCase();
   print_hex(cmd);
+  Serial.println(cmd);
   currentMillis = millis();
   do {
     while (readerSerial.available() > 0) {
@@ -177,6 +183,7 @@ void process_counter() {
   
   //Serial.println(res2);
   delayMicroseconds(20);
+  Serial.println("res2="+res2);
   if (res.length() > 0) {
     Uv = hexToDec(res.substring(0, 2)) / 10;
     Ia = hexToDec(res.substring(2, 4)) / 100;
@@ -186,6 +193,7 @@ void process_counter() {
     tarif =  hexToDec(res2.substring(0, 4)) / 100;
     tarif2 = hexToDec(res2.substring(4, 8)) / 100;
   };
+  //Serial.println(String(Uv)+String(Ia)+String(Pv)+String(tarif)+String(tarif2));
   Homey.setCapabilityValue("measure_voltage", Uv);
   Homey.setCapabilityValue("measure_current", Ia);
   Homey.setCapabilityValue("measure_power", Pv);
