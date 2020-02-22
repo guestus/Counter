@@ -27,7 +27,7 @@ const unsigned long interval = 5000; //Interval in milliseconds
 
 void setup() {
   Serial.begin(115200);
-  readerSerial.begin(9600, SWSERIAL_8N1, D5, D6);
+  readerSerial.begin(9600, SWSERIAL_8N1, D5, D6, false, 256);
   readerSerial.setTransmitEnablePin(D7); 
   readerSerial.enableRx(true);  
 
@@ -101,8 +101,8 @@ int crc16_modbus(String str1) {
                                0x40
                             };
   int len  = str1.length();
-  uint8_t uchCRCHi   = 0xFF;
-  uint8_t uchCRCLo   = 0xFF;
+  uint16_t uchCRCHi   = 0xFF;
+  uint16_t uchCRCLo   = 0xFF;
   int uIndex     = 0;
   for (int i = 0; i < len; i+=2) {
     uint8_t b= hexToDec(str1.substring(i,i+2));
@@ -143,57 +143,56 @@ unsigned int hexToDec(String hexString) {
 void print_hex(String str) {
   for (int i = 0; i < str.length(); i = i + 2) {
     readerSerial.write((uint8_t)hexToDec(str.substring(i, i + 2)));
-   // Serial.print(char(hexToDec(str.substring(i, i + 2))));
   }
 }
 
 void process_counter() {
-  int Uv = 0;
-  int Ia = 0;
-  int Pv = 0;
-  int tarif =  0;
-  int tarif2 = 0;
-
-  String cmd = "0056584163"; // 00 + 0EB6DE Адрес + 63 команда
-  cmd += String(crc16_modbus(cmd), HEX);
-  cmd.toUpperCase();
-  print_hex(cmd);
-  Serial.println(cmd);
-  String res = "";
-  unsigned long currentMillis = millis();
-  do {
-    while (readerSerial.available() > 0) {
-      uint8_t b=readerSerial.read();
-      res += String(b, HEX);
-    }
-  } while (millis() - previousMillis < 1000); 
-  Serial.println(res);
+  float Uv = 0;
+  float Ia = 0;
+  float Pv = 0;
+  float tarif =  0;
+  float tarif2 = 0;
   String res2 = "";
+  String res = "";
+  String cmd = "";
+  unsigned long currentMillis;
+
   cmd = "0056584127"; // 00 + 0EB6DE Адрес + 27 команда
   cmd += String(crc16_modbus(cmd), HEX);
   cmd.toUpperCase();
+  //Serial.println(cmd);
   print_hex(cmd);
-  Serial.println(cmd);
-  currentMillis = millis();
-  do {
-    while (readerSerial.available() > 0) {
-      res2 += String(readerSerial.read(), HEX);
-    }
-  } while (millis() - previousMillis < 1000); 
-  
-  //Serial.println(res2);
-  delayMicroseconds(20);
-  Serial.println("res2="+res2);
+  delay(250);
+  while (readerSerial.available() > 0) {
+      uint8_t b=readerSerial.read();
+      if (b<16) { res2 +=( "0"+String(b, HEX));}
+      else { res2 += String(b, HEX);}
+  }
+ 
+  cmd = "0056584163"; // 00 + 0EB6DE Адрес + 63 команда
+  cmd += String(crc16_modbus(cmd), HEX);
+  cmd.toUpperCase();
+  //Serial.println(cmd);
+  print_hex(cmd);
+  delay(250);
+  while (readerSerial.available() > 0) {
+      uint8_t b=readerSerial.read();
+      if (b<16) { res += ("0"+String(b, HEX));}
+      else { res += String(b, HEX); }  
+  }
+
   if (res.length() > 0) {
-    Uv = hexToDec(res.substring(0, 2)) / 10;
-    Ia = hexToDec(res.substring(2, 4)) / 100;
-    Pv = hexToDec(res.substring(4, 7)) / 1000;
+  //00565841 63 2350 0258 000537 b5fa
+    Uv = (float)(res.substring(10, 14)).toInt() / 10;
+    Ia = (float)(res.substring(14, 18)).toInt() / 100;
+    Pv = (float)(res.substring(18, 24)).toInt();
   };
   if (res2.length() > 0) {
-    tarif =  hexToDec(res2.substring(0, 4)) / 100;
-    tarif2 = hexToDec(res2.substring(4, 8)) / 100;
+  //056411690890000000030ffffffff
+    tarif =  (float)(res2.substring(10, 18)).toInt() / 100;
+    tarif2 = (float)(res2.substring(18, 26)).toInt() / 100;
   };
-  //Serial.println(String(Uv)+String(Ia)+String(Pv)+String(tarif)+String(tarif2));
+  Serial.println(String(Uv)+';'+String(Ia)+';'+String(Pv)+';'+String(tarif)+','+String(tarif2));
   Homey.setCapabilityValue("measure_voltage", Uv);
   Homey.setCapabilityValue("measure_current", Ia);
   Homey.setCapabilityValue("measure_power", Pv);
